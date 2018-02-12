@@ -1,0 +1,10 @@
+{
+    "compileOnSave": true,
+    "compilerOptions": {
+        "strict": true,
+        "target":"es3",
+        "sourceMap": true,
+        "sourceRoot": "D:\\Zev\\Projects\\ts-cscript-debugger",
+        "lib":["es5","scripthost"]
+    }
+}
