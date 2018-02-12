@@ -7,6 +7,8 @@ Pass a Typescript filename to `loader.js`
 ```
 cscript loader.js greeter.ts
 ```
+You can either pass in an absolute path, or run the script from within the same folder as the file.
+
 The script will search for a `tsconfig.json` in the parent folders of the file, and it will be used as the compilation target.
 
 `cscript.exe` will be started with the debugging options (`//X //D`).
