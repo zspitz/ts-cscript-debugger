@@ -1,2 +1,3 @@
 WScript.Echo('Hello, world');
-(WScript as any).blah();
+WScript.Echo(ActiveXObject.on);
+WScript.Echo([].forEach);

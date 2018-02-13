@@ -1,4 +1,5 @@
 "use strict";
 WScript.Echo('Hello, world');
-WScript.blah();
+WScript.Echo(ActiveXObject.on);
+WScript.Echo([].forEach);
 //# sourceMappingURL=test.js.map
