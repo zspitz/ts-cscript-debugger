@@ -3,8 +3,8 @@
     "compilerOptions": {
         "strict": true,
         "target":"es3",
-        "sourceMap": true,
-        "sourceRoot": "D:\\Zev\\Projects\\ts-cscript-debugger",
+        "inlineSourceMap": true,
+        "inlineSources": true,
         "lib":["es5","scripthost"]
     }
 }

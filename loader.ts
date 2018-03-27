@@ -1,3 +1,9 @@
+// const htmlfile = WScript.CreateObject('htmlfile');
+// htmlfile.write('<meta http-equiv="x-ua-compatible" content="IE=9" />');
+// // @ts-ignore
+// JSON = htmlfile.parentWindow.JSON;
+// htmlfile.close();
+
 const fso = new ActiveXObject('Scripting.FileSystemObject');
 
 const collectionToArray = <T>(col: { Item(key: any): T }): T[] => {
@@ -13,7 +19,11 @@ const collectionToArray = <T>(col: { Item(key: any): T }): T[] => {
 
 const isAbsolutePath = (s: string) => /^[A-Za-z]:/i.test(s);
 
-const shellExec = (command: string, cwd?: string) => {
+interface Stream {
+    stdout?: string;
+}
+
+const shellExec = (command: string, cwd?: string, stream?: Stream) => {
     WScript.Echo(`-- Command: ${command}`);
     WScript.Echo(`-- CWD: ${cwd}`);
 
@@ -23,31 +33,13 @@ const shellExec = (command: string, cwd?: string) => {
     while (exec.Status === 0) {
         WScript.Sleep(100);
         while (!exec.StdOut.AtEndOfStream) {
-            WScript.StdOut.Write(exec.StdOut.ReadAll());
+            const nextString = exec.StdOut.ReadAll();
+            if (stream) {
+                stream.stdout = (stream.stdout || '') + nextString;
+            }
+            WScript.StdOut.Write(nextString);
         }
     }
-};
-
-const prepend = (path: string, textToPrepend: string) => {
-    let txt: Scripting.TextStream | null = fso.OpenTextFile(outFile, Scripting.IOMode.ForReading, false);
-    let contents = txt.ReadAll();
-    txt.Close();
-    txt = null;
-    txt = fso.OpenTextFile(outFile, Scripting.IOMode.ForWriting);
-    txt.Write(textToPrepend + '\n' + contents);
-    txt.Close();
-    txt = null;
-};
-
-const prependFiles = (path: string, ...prepends: string[]) => {
-    let contents: string[] = [];
-    for (let i = 0; i < prepends.length; i++) {
-        let txt: Scripting.TextStream | null = fso.OpenTextFile(prepends[i]);
-        contents.push(txt.ReadAll());
-        txt.Close();
-        txt = null;
-    }
-    prepend(path, contents.join('\n'));
 };
 
 const args = collectionToArray(WScript.Arguments);
@@ -88,15 +80,45 @@ try {
     fso.CreateFolder(outfolderPath); // sometimes works on the second attempt
 }
 
-// TODO write outFile to same folder, then delete when finished; it shouldn't be added to source control, nor should it pollute the directory
-
-const outFile = fso.BuildPath(outfolderPath, fso.GetBaseName(file) + '.js');
 const tsconfigFolder = fso.GetParentFolderName(tsconfigPath);
-shellExec(`tsc.cmd -p tsconfig.json --outFile "${outFile}" --listEmittedFiles --noEmit false --module system --allowJs`, tsconfigFolder);
+const stream: Stream = {};
+shellExec('tsc.cmd --noEmit --listFiles', tsconfigFolder, stream);
+if (!(stream.stdout)) {
+    throw new Error('No emitted files');
+}
 
 const scriptFolder = fso.GetParentFolderName(WScript.ScriptFullName);
-prependFiles(outFile,
-    fso.BuildPath(scriptFolder, 'node_modules\\es5-shim\\es5-shim.js'),
-    fso.BuildPath(scriptFolder, 'node_modules\\activex-helpers\\activex-js-helpers.js'));
+const outFile = fso.BuildPath(outfolderPath, fso.GetBaseName(file) + '.js');
+const files = [
+    fso.BuildPath(scriptFolder, 'node_modules\\es5-shim\\es5-shim.js').replace(/\\/g, '\\\\'),
+    fso.BuildPath(scriptFolder, 'node_modules\\activex-helpers\\activex-js-helpers.js').replace(/\\/g, '\\\\')
+];
+for (var inputFile of stream.stdout.split('\r\n')) {
+    if (!inputFile) { continue; }
+    if (inputFile.indexOf('/AppData/Roaming/npm/node_modules/typescript/lib/') !== -1) { continue; }
+    files.push(inputFile.replace(/\\/g, '\\\\'));
+}
+
+const tsconfig = `{
+    "compilerOptions": {
+        "outFile": "${outFile.replace(/\\/g, '\\\\')}",
+        "listEmittedFiles": true,
+        "noEmit": false,
+        "module": "system",
+        "allowJs": true,
+        "checkJs": false,
+        "inlineSourceMap": true,
+        "inlineSources": true
+    },
+    "extends": "${tsconfigPath.replace(/\\/g, '\\\\')}",
+    "files": ["${files.join('","')}"]
+}`;
+
+let txt: Scripting.TextStream | undefined = fso.CreateTextFile(fso.BuildPath(outfolderPath, 'tsconfig.json'), true, true);
+txt.Write(tsconfig);
+txt.Close();
+txt = undefined;
+
+shellExec(`tsc.cmd -p tsconfig.json --outFile "${outFile}"`, outfolderPath);
 
 shellExec(`cscript.exe //x //d ${outFile}`, tsconfigFolder);
